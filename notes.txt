@@ -1,0 +1,14 @@
+Some functions are not fully compatible between POSIX and Windows systems. So the library will still define
+function X for system Y that doesn't support it. The OS will execute DEFAULT behaviour instead of what the user
+wrote. MACROS THAT AREN'T UNIVERSALLY SUPPORTED AND MAY ACT DIFFERENTLY ON DIFFERENT SYSTEMS NEED TO BE DOCUMENTED
+IN THE DOCUMENTATION
+(Basically the code written using "ccurrent" library should represent the "intent" of the user. If the intent can be fulfilled
+by the OS, it will be fulfilled, otherwise the OS will execute code with it's DEFAULT settings and mechanism)
+
+(For Example: The "cc_th_attr_setguardsize" macro is defined for both POSIX and Windows systems. But on windows
+it will run NOP, because Windows will not let the user manipulate the guard size, it is automatically managed by the OS.
+So the logic is to still write what you want your program to look like, than if the OS supports that feature, it is going to be
+executed, otherwise the OS will take the DEFAULT behaviour. Those differences ARE GOING TO BE MENTIONED INSIDE THE LIBRARY README
+OR DOCS FOR EVERY MACRO THAT HAS THIS KIND OF BEHAVIOUR)
+
+- cc_th_attr_destroy(p_attr) does nothing on windows because
