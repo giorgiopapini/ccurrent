@@ -17,16 +17,17 @@ CC_TH_FUNC_RET hello_world(void *a);
 CC_TH_FUNC_RET hello_world(void *a) {
     (void)a;
     printf("Hello World!\n");
-    CC_TH_RETURN(0);
+    CC_TH_RETURN(123);
 }
 
 
 int main(void) {
     cc_th th1;
+    void *retval;
 
-    int status = cc_th_create(&th1, NULL, hello_world, NULL);
+    cc_th_create(&th1, NULL, hello_world, NULL);
     printf("%ld\n", cc_th_self());
-	cc_th_join(th1, NULL);
-    (void)status;
+	cc_th_join(th1, &retval);
+    
     return 0;
 }
