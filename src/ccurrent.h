@@ -9,6 +9,11 @@
     #define CC_TH_FUNC_RET      void *
     #define CC_TH_RETURN(val)   return (void *)(intptr_t)val
 
+    #define CC_INHERIT_SCHED    PTHREAD_INHERIT_SCHED
+    #define CC_EXPLICIT_SCHED   PTHREAD_EXPLICIT_SCHED
+    #define CC_SCOPE_SYSTEM     PTHREAD_SCOPE_SYSTEM
+    #define CC_SCOPE_PROCESS    PTHREAD_SCOPE_PROCESS
+
     typedef pthread_t cc_th;
     typedef pthread_t cc_th_id;
     typedef pthread_attr_t cc_th_attr;
@@ -24,6 +29,11 @@
     #define CC_TH_FUNC_RET      DWORD WINAPI
     #define CC_TH_RETURN(val)   return (DWORD)(ULONG_PTR)val
 
+    #define CC_INHERIT_SCHED    0
+    #define CC_EXPLICIT_SCHED   1
+    #define CC_SCOPE_SYSTEM     0
+    #define CC_SCOPE_PROCESS    1
+
     typedef HANDLE cc_th;
     typedef DWORD cc_th_id;
     typedef DWORD cc_tls_key;
@@ -32,10 +42,12 @@
     typedef struct {
         int detach_state;
         size_t stack_size;
+        int inherit_sched;
+        int contention_scope;
     } cc_th_attr;
 
 #else
-    #error "Unsopported platform"
+    #error "Unsupported platform"
 #endif
 
 #define CC_TH_JOINABLE      0
@@ -75,6 +87,26 @@ static inline int cc_th_attr_getguardsize(cc_th_attr *p_attr, size_t *p_guardsiz
 #endif
 }
 
+static inline int cc_th_attr_getinheritsched(cc_th_attr *p_attr, int *p_inheritsched) {
+#if defined(CC_POSIX)
+    return pthread_attr_getinheritsched(p_attr, p_inheritsched);
+#elif defined(CC_WINDOWS)
+    if (!p_inheritsched || !p_attr) return -1;
+    *(p_inheritsched) = p_attr->inherit_sched;
+    return 0;
+#endif
+}
+
+static inline int cc_th_attr_getscope(cc_th_attr *p_attr, int *p_contentionscope) {
+#if defined(CC_POSIX)
+    return pthread_attr_getscope(p_attr, p_contentionscope);
+#elif defined(CC_WINDOWS)
+    if (!p_contentionscope || !p_attr) return -1;
+    *(p_contentionscope) = p_attr->contention_scope;
+    return 0;
+#endif
+}
+
 static inline int cc_th_attr_getstacksize(cc_th_attr *p_attr, size_t *p_stacksize) {
 #if defined(CC_POSIX)
     return pthread_attr_getstacksize(p_attr, p_stacksize);
@@ -92,6 +124,8 @@ static inline int cc_th_attr_init(cc_th_attr *p_attr) {
     if (!p_attr) return -1;
     p_attr->detach_state = CC_TH_JOINABLE;
     p_attr->stack_size = 0;
+    p_attr->inherit_sched = CC_EXPLICIT_SCHED;  /* default explicit scheduling */
+    p_attr->contention_scope = CC_SCOPE_SYSTEM;  /* default to system scope for Windows */ 
     return 0;
 #endif
 }
@@ -116,6 +150,26 @@ static inline int cc_th_attr_setguardsize(cc_th_attr *p_attr, size_t guardsize) 
 #endif
 }
 
+static inline int cc_th_attr_setinheritsched(cc_th_attr *p_attr, int inheritsched) {
+#if defined(CC_POSIX)
+    return pthread_attr_setinheritsched(p_attr, inheritsched);
+#elif defined(CC_WINDOWS)
+    if (!p_attr) return -1;
+    p_attr->inherit_sched = inheritsched;
+    return 0;
+#endif
+}
+
+static inline int cc_th_attr_setscope(cc_th_attr *p_attr, int contentionscope) {
+#if defined(CC_POSIX)
+    return pthread_attr_setscope(p_attr, contentionscope);
+#elif defined(CC_WINDOWS)
+    if (!p_attr) return -1;
+    p_attr->contention_scope = contentionscope;
+    return 0;
+#endif
+}
+
 static inline int cc_th_attr_setstacksize(cc_th_attr *p_attr, size_t stacksize) {
 #if defined(CC_POSIX)
     return pthread_attr_setstacksize(p_attr, stacksize);
@@ -131,18 +185,33 @@ static inline int cc_th_create(cc_th *p_th, cc_th_attr *p_attr, void *(*th_func)
     return pthread_create(p_th, p_attr, th_func, arg);
 #elif defined(CC_WINDOWS)
     SIZE_T actual_stacksize = 0;
-    if (p_attr && p_attr->stack_size > 0)
-        actual_stacksize = (SIZE_T)p_attr->stack_size;
+    int initial_thread_priority = THREAD_PRIORITY_NORMAL;
 
-    *p_th = CreateThread(NULL,
+    if (p_attr) {
+        if (p_attr->stack_size > 0) actual_stacksize = (SIZE_T)p_attr->stack_size;
+        if (p_attr->inherit_sched == CC_INHERIT_SCHED) {
+            initial_thread_priority = GetThreadPriority(GetCurrentThread());
+            if (initial_thread_priority == THREAD_PRIORITY_ERROR_RETURN)
+                initial_thread_priority = THREAD_PRIORITY_NORMAL;
+        }
+    }
+
+    *p_th = CreateThread(
+        NULL,
         actual_stacksize,
         (LPTHREAD_START_ROUTINE)th_func,
         (LPVOID)arg,
-        0,
+        CREATE_SUSPENDED,
         NULL
     );
-
     if (!*p_th) return -1;
+
+    if (initial_thread_priority != THREAD_PRIORITY_NORMAL)
+        SetThreadPriority(*p_th, initial_thread_priority);
+    
+    /* resume thread after setting properties */
+    ResumeThread(*p_th);
+
     if (p_attr && CC_TH_DETACHED == p_attr->detach_state) {
         if (!CloseHandle(*p_th)) return -2;
         *p_th = NULL;

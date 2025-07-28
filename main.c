@@ -8,6 +8,8 @@
 
     - https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread.h.html
     - https://www.intel.sg/content/dam/www/public/apac/xa/en/pdfs/ssg/Programming_with_Windows_Threads.pdf
+
+    TODO:   Write test functions for "cc_th_attr_get/setinheritsched" and "cc_th_attr_get/setscope".
 */
 
 #include "src/ccurrent.h"
