@@ -43,6 +43,7 @@
         int detach_state;
         size_t stack_size;
         int inherit_sched;
+        int sched_policy;
         int contention_scope;
     } cc_th_attr;
 
@@ -93,6 +94,16 @@ static inline int cc_th_attr_getinheritsched(cc_th_attr *p_attr, int *p_inherits
 #elif defined(CC_WINDOWS)
     if (!p_inheritsched || !p_attr) return -1;
     *(p_inheritsched) = p_attr->inherit_sched;
+    return 0;
+#endif
+}
+
+static inline int cc_th_attr_getschedpolicy(cc_th_attr *p_attr, int *p_schedpolicy) {
+#if defined(CC_POSIX)
+    return pthread_attr_getschedpolicy(p_attr, p_schedpolicy);
+#elif defined(CC_WINDOWS)
+    if (!p_schedpolicy || ! p_attr) return -1;
+    *(p_schedpolicy) = p_attr->sched_policy;
     return 0;
 #endif
 }
@@ -156,6 +167,16 @@ static inline int cc_th_attr_setinheritsched(cc_th_attr *p_attr, int inheritsche
 #elif defined(CC_WINDOWS)
     if (!p_attr) return -1;
     p_attr->inherit_sched = inheritsched;
+    return 0;
+#endif
+}
+
+static inline int cc_th_attr_setschedpolicy(cc_th_attr *p_attr, int schedpolicy) {
+#if defined(CC_POSIX)
+    return pthread_attr_setschedpolicy(p_attr, schedpolicy);
+#elif defined(CC_WINDOWS)
+    if (!p_attr) return -1;
+    p_attr->sched_policy = schedpolicy;
     return 0;
 #endif
 }
